@@ -1,0 +1,90 @@
+diff -ru a/BleKeyboard.cpp b/BleKeyboard.cpp
+--- a/BleKeyboard.cpp	2026-09-24 22:36:43
++++ b/BleKeyboard.cpp	2026-09-24 22:36:43
+@@ -103,7 +103,7 @@
+ 
+ void BleKeyboard::begin(void)
+ {
+-  BLEDevice::init(deviceName);
++  BLEDevice::init(String(deviceName.c_str()));
+   BLEServer* pServer = BLEDevice::createServer();
+   pServer->setCallbacks(this);
+ 
+@@ -114,23 +114,16 @@
+ 
+   outputKeyboard->setCallbacks(this);
+ 
+-  hid->manufacturer()->setValue(deviceManufacturer);
++  hid->manufacturer()->setValue(String(deviceManufacturer.c_str()));
+ 
+   hid->pnp(0x02, vid, pid, version);
+   hid->hidInfo(0x00, 0x01);
+ 
+ 
+-#if defined(USE_NIMBLE)
+-
+-  BLEDevice::setSecurityAuth(true, true, true);
+-
+-#else
+-
+   BLESecurity* pSecurity = new BLESecurity();
+-  pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
++  pSecurity->setCapability(ESP_IO_CAP_NONE);
++  pSecurity->setAuthenticationMode(true, false, true);
+ 
+-#endif // USE_NIMBLE
+-
+   hid->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+   hid->startServices();
+ 
+@@ -139,7 +132,9 @@
+   advertising = pServer->getAdvertising();
+   advertising->setAppearance(HID_KEYBOARD);
+   advertising->addServiceUUID(hid->hidService()->getUUID());
+-  advertising->setScanResponse(false);
++  advertising->setScanResponse(true);
++  advertising->setMinPreferred(0x06);
++  advertising->setMaxPreferred(0x12);
+   advertising->start();
+   hid->setBatteryLevel(batteryLevel);
+ 
+@@ -503,30 +498,25 @@
+ void BleKeyboard::onConnect(BLEServer* pServer) {
+   this->connected = true;
+ 
+-#if !defined(USE_NIMBLE)
+-
++#if defined(CONFIG_BLUEDROID_ENABLED)
+   BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+-  desc->setNotifications(true);
++  if (desc) desc->setNotifications(true);
+   desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+-  desc->setNotifications(true);
+-
+-#endif // !USE_NIMBLE
+-
++  if (desc) desc->setNotifications(true);
++#endif
+ }
+ 
+ void BleKeyboard::onDisconnect(BLEServer* pServer) {
+   this->connected = false;
+ 
+-#if !defined(USE_NIMBLE)
+-
++#if defined(CONFIG_BLUEDROID_ENABLED)
+   BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+-  desc->setNotifications(false);
++  if (desc) desc->setNotifications(false);
+   desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+-  desc->setNotifications(false);
++  if (desc) desc->setNotifications(false);
++#endif
+ 
+-  advertising->start();
+-
+-#endif // !USE_NIMBLE
++  BLEDevice::startAdvertising();
+ }
+ 
+ void BleKeyboard::onWrite(BLECharacteristic* me) {
